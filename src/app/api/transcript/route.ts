@@ -3,10 +3,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer-core';
 import chrome from '@sparticuz/chromium';
+import fs from 'fs';
+import path from 'path';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+import { createReadStream } from 'fs';
+import { randomUUID } from 'crypto';
+import OpenAI from 'openai';
 
 // Even shorter timeout for serverless environment
 const NAVIGATION_TIMEOUT = 8000; // 8 seconds
 const FUNCTION_TIMEOUT = 9000;   // 9 seconds - just under Vercel's 10s limit
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Helper to download a file
+async function downloadFile(url: string, filePath: string): Promise<void> {
+  if (!url || url === "https://example.com/video.mp4") {
+    throw new Error("Invalid video URL");
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to download: ${response.statusText}`);
+    
+    const buffer = await response.arrayBuffer();
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, Buffer.from(buffer));
+    console.log(`File downloaded to ${filePath}`);
+  } catch (error) {
+    console.error('Download error:', error);
+    throw error;
+  }
+}
 
 // Function to extract transcript and metrics from Instagram using Puppeteer
 async function extractInstagramData(url: string) {
@@ -17,6 +49,9 @@ async function extractInstagramData(url: string) {
   }
 
   let browser;
+  let videoUrl = null;
+  let transcriptFromAudio = "Audio transcription not available.";
+  
   try {
     console.log('Setting up browser for serverless environment...');
     
@@ -80,14 +115,60 @@ async function extractInstagramData(url: string) {
     
     console.log('Extracted caption:', caption);
     
-    // Return simplified response
+    // Try to extract video URL
+    try {
+      videoUrl = await page.evaluate(() => {
+        const videoElements = document.querySelectorAll('video');
+        if (videoElements.length > 0 && videoElements[0].src) {
+          return videoElements[0].src;
+        }
+        return null;
+      });
+      
+      console.log('Video URL found:', videoUrl);
+      
+      // If video URL found, download and transcribe
+      if (videoUrl) {
+        try {
+          // Create temporary directory in /tmp for Vercel serverless
+          const tmpDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'public/media');
+          const videoId = randomUUID();
+          const videoPath = path.join(tmpDir, `${videoId}.mp4`);
+          
+          // Download video
+          await downloadFile(videoUrl, videoPath);
+          console.log('Video downloaded successfully');
+          
+          // Transcribe with OpenAI
+          const transcription = await transcribeAudio(videoPath);
+          transcriptFromAudio = transcription;
+          console.log('Transcription completed');
+          
+          // Clean up
+          try {
+            await fs.promises.unlink(videoPath);
+          } catch (err) {
+            console.error('Error cleaning up video file:', err);
+          }
+        } catch (transcribeError) {
+          console.error('Error during transcription:', transcribeError);
+          transcriptFromAudio = "Error transcribing audio. Please try again.";
+        }
+      } else {
+        console.log('No video URL found on page');
+      }
+    } catch (videoError) {
+      console.error('Error extracting video URL:', videoError);
+    }
+    
+    // Return response with all data
     return {
       transcript: caption,
       views: "100K", // Placeholder
       likes: "10K",  // Placeholder
       comments: "500", // Placeholder
-      videoUrl: "https://example.com/video.mp4", // Placeholder
-      transcriptFromAudio: "Audio transcription would appear here if video was processed."
+      videoUrl: videoUrl || "https://example.com/video.mp4", // Use real URL or placeholder
+      transcriptFromAudio
     };
     
   } catch (error) {
@@ -102,6 +183,25 @@ async function extractInstagramData(url: string) {
         console.error('Error closing browser:', closeError);
       }
     }
+  }
+}
+
+// Function to transcribe audio using OpenAI
+async function transcribeAudio(filePath: string): Promise<string> {
+  try {
+    console.log(`Transcribing audio from: ${filePath}`);
+    
+    // Use OpenAI's API to transcribe the audio
+    const transcription = await openai.audio.transcriptions.create({
+      file: createReadStream(filePath),
+      model: "whisper-1",
+      language: "en",
+    });
+    
+    return transcription.text;
+  } catch (error) {
+    console.error('Error during transcription:', error);
+    throw new Error(`Failed to transcribe audio: ${(error instanceof Error) ? error.message : String(error)}`);
   }
 }
 
