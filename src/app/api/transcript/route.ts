@@ -37,7 +37,11 @@ async function extractInstagramData(url: string) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--disable-extensions'
+        '--disable-extensions',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
       ],
       executablePath,
       headless: true
@@ -45,18 +49,6 @@ async function extractInstagramData(url: string) {
     
     console.log('Browser launched successfully');
     const page = await browser.newPage();
-    
-    // Minimal resources - block unnecessary requests
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const resourceType = req.resourceType();
-      // Only allow document, script, xhr, and stylesheet
-      if (['image', 'media', 'font', 'other'].includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
     
     // Set viewport size to a mobile view
     await page.setViewport({ width: 375, height: 812 });
@@ -66,24 +58,65 @@ async function extractInstagramData(url: string) {
     
     console.log(`Navigating to: ${url}`);
     
-    // Race the operation against the timeout
+    // Navigate to the Instagram post URL with a timeout
     await Promise.race([
-      page.goto(url, { 
-        waitUntil: 'domcontentloaded', // Less strict than networkidle2 
-        timeout: NAVIGATION_TIMEOUT 
-      }),
+      page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUT }),
       timeoutPromise
     ]);
     
-    console.log('Page loaded, returning mock data for now');
+    console.log('Page loaded, extracting data...');
     
-    // For now, return mock data to test the API functionality
+    // Wait for content to load
+    await page.waitForSelector('article', { timeout: 5000 }).catch(() => console.log('Article selector not found'));
+    
+    // Give a bit more time for dynamic content
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Extract data from Instagram
+    const extractedData = await page.evaluate(() => {
+      // Caption extraction
+      const captionElement = document.querySelector('div[data-block="true"]') || 
+                             document.querySelector('h1') || 
+                             document.querySelector('article div > span');
+      
+      // Likes/Views extraction
+      const statsElements = Array.from(document.querySelectorAll('section span'));
+      
+      let likesElement = null;
+      let viewsElement = null;
+      let commentsElement = null;
+      
+      for (const el of statsElements) {
+        const text = el.textContent?.toLowerCase() || '';
+        if (text.includes('like') || text.includes('heart')) {
+          likesElement = el;
+        } else if (text.includes('view')) {
+          viewsElement = el;
+        } else if (text.includes('comment')) {
+          commentsElement = el;
+        }
+      }
+      
+      // Video URL extraction - this is difficult due to Instagram's security
+      // but we can try to find video elements
+      const videoElements = document.querySelectorAll('video');
+      const videoUrl = videoElements.length > 0 ? videoElements[0].src : null;
+      
+      return {
+        transcript: captionElement ? captionElement.textContent : "No caption found",
+        views: viewsElement ? viewsElement.textContent : null,
+        likes: likesElement ? likesElement.textContent : null,
+        comments: commentsElement ? commentsElement.textContent : null,
+        videoUrl: videoUrl || "https://example.com/video.mp4" // Fallback for demo
+      };
+    });
+    
+    console.log('Extracted data:', extractedData);
+    
     return {
-      transcript: "This is a mock Instagram caption for testing. The actual extraction is still being implemented.",
-      views: "100K",
-      likes: "10K",
-      comments: "500",
-      videoUrl: "https://example.com/video.mp4"
+      ...extractedData,
+      // Add a transcription placeholder since we can't easily extract the audio in this implementation
+      transcriptFromAudio: "This is a placeholder for audio transcription. In a production environment, we would use OpenAI Whisper to transcribe the actual audio from the video."
     };
     
   } catch (error) {
@@ -132,7 +165,7 @@ export async function POST(request: NextRequest) {
     // Create a timeout for the entire handler
     const responsePromise = extractInstagramData(igLink);
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('API timeout')), FUNCTION_TIMEOUT);
+      setTimeout(() => reject(new Error('API timeout - Instagram extraction took too long')), FUNCTION_TIMEOUT);
     });
     
     // Race the actual operation against the timeout
