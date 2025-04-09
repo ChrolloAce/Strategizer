@@ -15,10 +15,20 @@ import OpenAI from 'openai';
 const NAVIGATION_TIMEOUT = 8000; // 8 seconds
 const FUNCTION_TIMEOUT = 9000;   // 9 seconds - just under Vercel's 10s limit
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Initialize OpenAI client conditionally
+let openai: OpenAI | null = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    console.log('OpenAI client initialized successfully');
+  } else {
+    console.log('No OpenAI API key found. Transcription will be unavailable.');
+  }
+} catch (error) {
+  console.error('Error initializing OpenAI client:', error);
+}
 
 // Helper to download a file
 async function downloadFile(url: string, filePath: string): Promise<void> {
@@ -130,25 +140,31 @@ async function extractInstagramData(url: string) {
       // If video URL found, download and transcribe
       if (videoUrl) {
         try {
-          // Create temporary directory in /tmp for Vercel serverless
-          const tmpDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'public/media');
-          const videoId = randomUUID();
-          const videoPath = path.join(tmpDir, `${videoId}.mp4`);
-          
-          // Download video
-          await downloadFile(videoUrl, videoPath);
-          console.log('Video downloaded successfully');
-          
-          // Transcribe with OpenAI
-          const transcription = await transcribeAudio(videoPath);
-          transcriptFromAudio = transcription;
-          console.log('Transcription completed');
-          
-          // Clean up
-          try {
-            await fs.promises.unlink(videoPath);
-          } catch (err) {
-            console.error('Error cleaning up video file:', err);
+          // Check if OpenAI client is available before attempting transcription
+          if (!openai) {
+            console.log('Skipping transcription: OpenAI API key not set');
+            transcriptFromAudio = "Audio transcription unavailable. Please set OPENAI_API_KEY in environment variables.";
+          } else {
+            // Create temporary directory in /tmp for Vercel serverless
+            const tmpDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'public/media');
+            const videoId = randomUUID();
+            const videoPath = path.join(tmpDir, `${videoId}.mp4`);
+            
+            // Download video
+            await downloadFile(videoUrl, videoPath);
+            console.log('Video downloaded successfully');
+            
+            // Transcribe with OpenAI
+            const transcription = await transcribeAudio(videoPath);
+            transcriptFromAudio = transcription;
+            console.log('Transcription completed');
+            
+            // Clean up
+            try {
+              await fs.promises.unlink(videoPath);
+            } catch (err) {
+              console.error('Error cleaning up video file:', err);
+            }
           }
         } catch (transcribeError) {
           console.error('Error during transcription:', transcribeError);
@@ -190,6 +206,11 @@ async function extractInstagramData(url: string) {
 async function transcribeAudio(filePath: string): Promise<string> {
   try {
     console.log(`Transcribing audio from: ${filePath}`);
+    
+    // Check if OpenAI client is available
+    if (!openai) {
+      throw new Error('OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.');
+    }
     
     // Use OpenAI's API to transcribe the audio
     const transcription = await openai.audio.transcriptions.create({
