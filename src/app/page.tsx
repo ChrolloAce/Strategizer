@@ -450,7 +450,7 @@ export default function Home() {
                           <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-semibold text-gray-800">Speech Transcript</h2>
                             <button
-                              onClick={() => navigator.clipboard.writeText(data.transcriptFromAudio)}
+                              onClick={() => navigator.clipboard.writeText(data.transcriptFromAudio || '')}
                               className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
                             >
                               Copy
