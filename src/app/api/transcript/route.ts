@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer-core';
 import chrome from '@sparticuz/chromium';
 
+// Shorter timeout for serverless environment
+const NAVIGATION_TIMEOUT = 25000; // 25 seconds
+const FUNCTION_TIMEOUT = 30000; // 30 seconds - just under Vercel's 60s limit to have time for cleanup
+
 // Function to extract transcript and metrics from Instagram using Puppeteer
 async function extractInstagramData(url: string) {
   console.log(`Attempting to extract data from: ${url}`);
@@ -11,6 +15,11 @@ async function extractInstagramData(url: string) {
   if (!url.includes('instagram.com')) {
     throw new Error('Not a valid Instagram URL');
   }
+
+  // Create a timeout promise to prevent function from hanging
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Operation timed out')), FUNCTION_TIMEOUT)
+  );
 
   let browser;
   try {
@@ -20,12 +29,16 @@ async function extractInstagramData(url: string) {
     const executablePath = await chrome.executablePath();
     console.log(`Chromium executable path: ${executablePath}`);
     
-    // Additional logging for debugging
-    console.log('Chrome args:', chrome.args);
-    
-    // Launch a headless browser with minimal args and chromium
+    // Launch a headless browser with minimal resources
     browser = await puppeteer.launch({
-      args: [...chrome.args, '--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        ...chrome.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-extensions'
+      ],
       executablePath,
       headless: true
     });
@@ -33,21 +46,40 @@ async function extractInstagramData(url: string) {
     console.log('Browser launched successfully');
     const page = await browser.newPage();
     
-    // Set viewport size to a mobile view to better access Instagram 
+    // Minimal resources - block unnecessary requests
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const resourceType = req.resourceType();
+      // Only allow document, script, xhr, and stylesheet
+      if (['image', 'media', 'font', 'other'].includes(resourceType)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+    
+    // Set viewport size to a mobile view
     await page.setViewport({ width: 375, height: 812 });
     
     // Set user agent to mimic mobile device
     await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1');
     
     console.log(`Navigating to: ${url}`);
-    // Navigate to the Instagram post URL
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     
-    console.log('Page loaded, extracting data...');
+    // Race the operation against the timeout
+    await Promise.race([
+      page.goto(url, { 
+        waitUntil: 'domcontentloaded', // Less strict than networkidle2 
+        timeout: NAVIGATION_TIMEOUT 
+      }),
+      timeoutPromise
+    ]);
     
-    // For now, return mock data until the actual extraction is implemented
+    console.log('Page loaded, returning mock data for now');
+    
+    // For now, return mock data to test the API functionality
     return {
-      transcript: "Instagram caption would be extracted here",
+      transcript: "This is a mock Instagram caption for testing. The actual extraction is still being implemented.",
       views: "100K",
       likes: "10K",
       comments: "500",
@@ -69,11 +101,23 @@ async function extractInstagramData(url: string) {
   }
 }
 
+// Wrap the handler to ensure proper error handling
 export async function POST(request: NextRequest) {
   console.log('Received POST request to /api/transcript');
   
   try {
-    const { igLink } = await request.json();
+    // Parse request body with error handling
+    let igLink;
+    try {
+      const body = await request.json();
+      igLink = body.igLink;
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid request format' },
+        { status: 400 }
+      );
+    }
     
     if (!igLink) {
       console.log('No Instagram link provided');
@@ -84,13 +128,22 @@ export async function POST(request: NextRequest) {
     }
     
     console.log(`Processing Instagram link: ${igLink}`);
-    const data = await extractInstagramData(igLink);
+    
+    // Create a timeout for the entire handler
+    const responsePromise = extractInstagramData(igLink);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('API timeout')), FUNCTION_TIMEOUT);
+    });
+    
+    // Race the actual operation against the timeout
+    const data = await Promise.race([responsePromise, timeoutPromise]);
     
     console.log('Successfully extracted data:', data);
     return NextResponse.json(data);
   } catch (error: unknown) {
     console.error('Error processing request:', error);
     
+    // Always return a proper JSON response
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to extract data' },
       { status: 500 }
