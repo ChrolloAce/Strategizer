@@ -1,7 +1,8 @@
 // Instagram Transcript API route
 
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chrome from '@sparticuz/chromium';
 
 // Function to extract transcript and metrics from Instagram using Puppeteer
 async function extractInstagramData(url: string) {
@@ -13,9 +14,15 @@ async function extractInstagramData(url: string) {
 
   let browser;
   try {
-    // Launch a headless browser
+    // Configure browser to work in serverless environment
+    const executablePath = await chrome.executablePath();
+    
+    // Launch a headless browser with minimal args and chromium
     browser = await puppeteer.launch({
-      headless: true, // Use headless mode
+      args: chrome.args,
+      executablePath,
+      headless: true,
+      ignoreHTTPSErrors: true,
     });
     
     const page = await browser.newPage();
