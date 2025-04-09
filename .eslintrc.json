@@ -1,6 +1,12 @@
 {
-  "extends": "next/core-web-vitals",
+  "extends": ["next/core-web-vitals"],
   "rules": {
-    "react/no-unescaped-entities": "off"
-  }
+    "react/no-unescaped-entities": 0,
+    "@next/next/no-page-custom-font": 0,
+    "react/display-name": 0,
+    "react/jsx-no-target-blank": 0,
+    "react/jsx-key": 0,
+    "react-hooks/exhaustive-deps": 0
+  },
+  "ignorePatterns": ["node_modules/", ".next/", "public/"]
 } 

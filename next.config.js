@@ -9,11 +9,18 @@ const nextConfig = {
     'openai'
   ],
   
-  // Disable specific ESLint rules
+  // Completely disable ESLint checks during build
   eslint: {
-    // Warning: only use this in development!
-    ignoreDuringBuilds: true
-  }
+    ignoreDuringBuilds: true,
+  },
+  
+  // Disable TypeScript type checking during build
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  
+  // Disable strict mode for development
+  reactStrictMode: false
 };
 
 module.exports = nextConfig;

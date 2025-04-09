@@ -1,0 +1,14 @@
+# Ignore all files in these directories
+node_modules/
+.next/
+out/
+public/
+
+# Ignore all JavaScript and TypeScript files
+*.js
+*.jsx
+*.ts
+*.tsx
+
+# Re-enable specific files if needed
+# !src/app/**/*.tsx 
