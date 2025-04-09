@@ -1,7 +1,7 @@
 declare module 'node-whisper' {
   interface WhisperOptions {
     language?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   }
 
   interface WhisperConfig {
@@ -9,10 +9,17 @@ declare module 'node-whisper' {
     whisperOptions?: WhisperOptions;
   }
 
+  interface TranscriptionSegment {
+    text: string;
+    start: number;
+    end: number;
+    confidence: number;
+  }
+
   interface TranscriptionResult {
     text: string;
-    segments?: any[];
-    [key: string]: any;
+    segments?: TranscriptionSegment[];
+    [key: string]: unknown;
   }
 
   class NodeWhisper {

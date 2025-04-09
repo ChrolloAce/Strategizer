@@ -46,7 +46,6 @@ export default function Home() {
 
   // Add these state variables after the existing state declarations
   const [savedTranscripts, setSavedTranscripts] = useState<SavedTranscript[]>([]);
-  const [showSaved, setShowSaved] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
@@ -149,8 +148,8 @@ export default function Home() {
       }
       
       setData(responseData);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch data. Please check the link and try again.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch data. Please check the link and try again.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -162,10 +161,10 @@ export default function Home() {
     if (!transcript) return '';
 
     // Split by sentences (looking for period, question mark, or exclamation mark followed by space)
-    let sentences = transcript.split(/(?<=[.!?])\s+/);
+    const sentences = transcript.split(/(?<=[.!?])\s+/);
     
     // Add paragraph breaks every few sentences for readability
-    let paragraphs = [];
+    const paragraphs = [];
     const sentencesPerParagraph = 3;
     
     for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
@@ -174,7 +173,7 @@ export default function Home() {
     
     // Try to detect if there's a speaker pattern (like "Person A: text")
     const speakerPattern = /^([A-Za-z\s]+):\s/;
-    let hasSpeakers = sentences.some(s => speakerPattern.test(s));
+    const hasSpeakers = sentences.some(s => speakerPattern.test(s));
     
     if (!hasSpeakers) {
       // If no explicit speakers, assume a single speaker

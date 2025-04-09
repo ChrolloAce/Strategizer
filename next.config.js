@@ -2,7 +2,7 @@
 const nextConfig = {
   // Add experimental flag to help with server component modules
   experimental: {
-    serverComponentsExternalPackages: [
+    serverExternalPackages: [
       'fluent-ffmpeg',
       '@ffmpeg-installer/ffmpeg',
       'node-whisper',

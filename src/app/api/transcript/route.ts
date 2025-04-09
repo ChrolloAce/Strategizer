@@ -2,11 +2,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
-import fs from 'fs';
-import path from 'path';
-import https from 'https';
-import { promisify } from 'util';
-import { exec } from 'child_process';
 
 // Function to extract transcript and metrics from Instagram using Puppeteer
 async function extractInstagramData(url: string) {
@@ -37,7 +32,7 @@ async function extractInstagramData(url: string) {
     console.log('Page loaded, extracting data...');
     
     // Extract all the data from the page
-    const extractedData = await page.evaluate(() => {
+    await page.evaluate(() => {
       const data = {
         transcript: null,
         views: null,
@@ -69,26 +64,6 @@ async function extractInstagramData(url: string) {
   }
 }
 
-// Function to transcribe audio from video
-async function transcribeAudio(audioPath: string) {
-  try {
-    // Import OpenAI API client
-    const OpenAI = (await import('openai')).default;
-    
-    // Initialize OpenAI client with API key from environment variables
-    const openai = new OpenAI({ 
-      apiKey: process.env.OPENAI_API_KEY || 'your-api-key-goes-here' 
-    });
-    
-    // In a real implementation, you would call the OpenAI API to transcribe the audio
-    
-    return "Transcription of the audio would appear here";
-  } catch (error) {
-    console.error('Error transcribing audio:', error);
-    return 'Failed to transcribe audio from the video';
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { igLink } = await request.json();
@@ -103,11 +78,11 @@ export async function POST(request: NextRequest) {
     const data = await extractInstagramData(igLink);
     
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error extracting data:', error);
     
     return NextResponse.json(
-      { error: error.message || 'Failed to extract data' },
+      { error: error instanceof Error ? error.message : 'Failed to extract data' },
       { status: 500 }
     );
   }
