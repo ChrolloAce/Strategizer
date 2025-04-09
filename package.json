@@ -16,7 +16,6 @@
     "next": "15.2.4",
     "node-whisper": "^2024.11.13",
     "openai": "^4.92.1",
-    "puppeteer": "^24.6.0",
     "puppeteer-core": "^24.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

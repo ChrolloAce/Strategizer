@@ -144,13 +144,16 @@ export default function Home() {
       const responseData = await response.json();
       
       if (!response.ok) {
-        throw new Error(responseData.error || 'Failed to fetch data');
+        // Log the detailed error information 
+        console.error('API Error Response:', responseData);
+        throw new Error(responseData.error || `Failed to fetch data (Status: ${response.status})`);
       }
       
       setData(responseData);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch data. Please check the link and try again.');
-      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data. Please check the link and try again.';
+      console.error('Request Error:', err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
