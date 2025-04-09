@@ -302,8 +302,8 @@ export default function Home() {
                   <h4 className="text-sm font-semibold text-red-700 mb-1">Error:</h4>
                   <p className="text-sm text-red-600 whitespace-pre-wrap">{error}</p>
                   <p className="text-xs text-red-500 mt-2">
-                    Note: Instagram data extraction may take up to 30 seconds. If you're getting timeout errors,
-                    Vercel's serverless functions might be exceeding their time limit.
+                    Note: Instagram data extraction may take up to 30 seconds. If you&apos;re getting timeout errors,
+                    Vercel&apos;s serverless functions might be exceeding their time limit.
                   </p>
                 </div>
               )}
