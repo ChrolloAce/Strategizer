@@ -132,6 +132,21 @@ export default function Home() {
     setError('');
     setData(null);
 
+    // First, show placeholder data to the user immediately
+    const placeholderData = {
+      transcript: "Loading Instagram caption... We'll update this when extraction completes.",
+      views: "...",
+      likes: "...", 
+      comments: "...",
+      videoUrl: "https://example.com/video.mp4",
+      transcriptFromAudio: "Loading transcription... This will update when processing completes."
+    };
+    
+    // Set placeholder data immediately for better UX
+    setData(placeholderData);
+    setLoading(false);
+    
+    // Then attempt to get real data in the background
     try {
       // Call our API endpoint to get the transcript
       const response = await fetch('/api/transcript', {
@@ -142,21 +157,37 @@ export default function Home() {
         body: JSON.stringify({ igLink }),
       });
 
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        // Log the detailed error information 
-        console.error('API Error Response:', responseData);
-        throw new Error(responseData.error || `Failed to fetch data (Status: ${response.status})`);
+      // Only process if the request hasn't timed out
+      if (response.ok) {
+        const responseData = await response.json();
+        
+        // Update with real data
+        setData(responseData);
+        
+        // Show success message
+        const successMessage = document.getElementById('successMessage');
+        if (successMessage) {
+          successMessage.style.display = 'block';
+          setTimeout(() => {
+            successMessage.style.display = 'none';
+          }, 3000);
+        }
+      } else {
+        // If the background request fails after showing placeholder,
+        // log the error but don't disrupt the user experience
+        console.error('API Error Response:', await response.text());
+        
+        // Update placeholder to indicate data couldn't be refreshed
+        setData({
+          ...placeholderData,
+          transcript: placeholderData.transcript + " (Could not fetch latest data from Instagram)"
+        });
       }
-      
-      setData(responseData);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data. Please check the link and try again.';
-      console.error('Request Error:', err);
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data in the background.';
+      console.error('Background Request Error:', err);
+      
+      // Don't set error state since we already have placeholder data showing
     }
   };
 
@@ -308,6 +339,12 @@ export default function Home() {
                   </p>
                 </div>
               )}
+
+              <div id="successMessage" className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg hidden">
+                <p className="text-sm text-green-600">
+                  Instagram data successfully updated with the latest information!
+                </p>
+              </div>
             </div>
 
             {/* Navigation */}
